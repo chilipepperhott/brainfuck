@@ -1,185 +1,78 @@
-use std::{collections::VecDeque, error::Error, fmt::Display};
+use crate::error::Error;
+use std::convert::TryInto;
+use std::iter;
+use std::{collections::VecDeque, fmt::Display};
+
+use crate::program::{Instruction, Program};
 
 #[derive(Debug)]
-pub enum Command {
-    MoveRight(usize),
-    MoveLeft(usize),
-    Increment(usize),
-    Decrement(usize),
-    Output,
-    Input,
-    JumpOpen(usize),
-    JumpClose(usize),
-}
-
-#[derive(Debug)]
-pub enum BrainfuckError {
-    UnmatchedBracket(usize),
-    OutOfBounds,
-}
-
-impl Error for BrainfuckError {}
-
-impl Display for BrainfuckError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnmatchedBracket(n) => write!(
-                f,
-                "There is an unmatched bracket at program position: {}",
-                n
-            ),
-            Self::OutOfBounds => write!(f, "The program went to far to the left"),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BrainfuckInterpreter {
+pub struct Interpreter {
     output: VecDeque<u8>,
     input: VecDeque<u8>,
     memory: Vec<u8>,
     memory_pointer: usize,
-    program: Vec<Command>,
+    program: Program,
     program_pointer: usize,
 }
 
-impl BrainfuckInterpreter {
-    pub fn new(program_text: &str) -> Result<Self, BrainfuckError> {
-        use Command::*;
-        let program_text = program_text.as_bytes();
-
-        let mut program = Vec::new();
-        let mut scan_pointer = 0;
-        let mut jump_opens = Vec::new();
-
-        /// Scans forwards counting repetitions of a character
-        fn count_repetitions(
-            scan_pointer: &mut usize,
-            program_text: &[u8],
-            character: u8,
-        ) -> usize {
-            let mut count = 1;
-            while {
-                if let Some(v) = program_text.get(*scan_pointer + 1) {
-                    program_text[*scan_pointer + 1] == character
-                }else{
-                    false
-                }
-                
-            } {
-                *scan_pointer += 1;
-                count += 1;
-            }
-            count
-        }
-
-        while scan_pointer < program_text.len() {
-            match program_text[scan_pointer] {
-                b'>' => program.push(MoveRight(count_repetitions(
-                    &mut scan_pointer,
-                    program_text,
-                    b'>',
-                ))),
-                b'<' => program.push(MoveLeft(count_repetitions(
-                    &mut scan_pointer,
-                    program_text,
-                    b'<',
-                ))),
-                b'+' => program.push(Increment(count_repetitions(
-                    &mut scan_pointer,
-                    program_text,
-                    b'+',
-                ))),
-                b'-' => program.push(Decrement(count_repetitions(
-                    &mut scan_pointer,
-                    program_text,
-                    b'-',
-                ))),
-                b'.' => program.push(Output),
-                b',' => program.push(Input),
-                b'[' => {
-                    jump_opens.push(program.len());
-                    program.push(JumpOpen(0))
-                }
-                b']' => match jump_opens.pop() {
-                    Some(location) => {
-                        program[location] = JumpOpen(program.len());
-                        program.push(JumpClose(location));
-                    }
-                    None => return Err(BrainfuckError::UnmatchedBracket(scan_pointer)),
-                },
-                _ => (),
-            }
-
-            scan_pointer += 1;
-        }
-
-        if let Some(unmatched_bracket) = jump_opens.pop() {
-            return Err(BrainfuckError::UnmatchedBracket(unmatched_bracket));
-        }
-
-        Ok(BrainfuckInterpreter {
+impl Interpreter {
+    pub fn new(program: Program) -> Self {
+        Interpreter {
             output: VecDeque::new(),
             input: VecDeque::new(),
             memory: vec![0; 30_000],
             memory_pointer: 0,
             program,
             program_pointer: 0,
-        })
+        }
     }
 
     /// Steps the program forward once.
     /// If there is nothing in the input queue and it needs input, nothing happens.
     /// Returns false if the program has ended, otherwise it returns true
-    pub fn step(&mut self) -> Result<bool, BrainfuckError> {
-        if self.program_pointer >= self.program.len() {
-            return Ok(false);
-        }
+    pub fn step(&mut self) -> Result<bool, Error> {
+        let instruction = match self.program.get_instruction(self.program_pointer){
+            Some(instruction) => instruction,
+            None => return Ok(false),
+        };
 
-        /// Checks if the operation being executed has required memory
-        fn ensure_memory_exists(memory: &mut Vec<u8>, location: usize) {
-            while memory.len() <= location {
-                memory.push(0);
-            }
-        }
-
-        match self.program[self.program_pointer] {
-            Command::MoveRight(n) => {
-                self.memory_pointer += n;
-                ensure_memory_exists(&mut self.memory, self.memory_pointer);
-            }
-            Command::MoveLeft(n) => {
-                if self.memory_pointer < n {
-                    return Err(BrainfuckError::OutOfBounds);
+        match instruction {
+            Instruction::Move(n) => {
+                if n >= 0{
+                    self.memory_pointer += n as usize;
+                }else{
+                    self.memory_pointer -= -n as usize;
                 }
 
-                self.memory_pointer -= n;
+                if self.memory_pointer >= self.memory.len(){
+                    // Resize in larger chunks to avoid doing it a lot.
+                    self.memory.resize(self.memory_pointer + 30_000, 0);
+                }
             }
-            Command::Increment(n) => {
-                self.memory[self.memory_pointer] = self.memory[self.memory_pointer]
-                    .overflowing_add((n % 256) as u8)
-                    .0;
+            Instruction::Increment(n) => {
+                let cell_value =  self.memory[self.memory_pointer];
+
+                self.memory[self.memory_pointer] = if n > 0{
+                    cell_value.overflowing_add((n % 256) as u8).0
+                }else{
+                    cell_value.overflowing_sub((-n % 256) as u8).0
+                };
             }
-            Command::Decrement(n) => {
-                self.memory[self.memory_pointer] = self.memory[self.memory_pointer]
-                    .overflowing_sub((n % 256) as u8)
-                    .0;
-            }
-            Command::Output => {
+            Instruction::Output => {
                 self.output.push_back(self.memory[self.memory_pointer]);
             }
-            Command::Input => {
+            Instruction::Input => {
                 self.memory[self.memory_pointer] = match self.input.pop_front() {
                     Some(value) => value,
                     None => return Ok(true),
                 }
             }
-            Command::JumpOpen(location) => {
+            Instruction::JumpOpen(location) => {
                 if self.memory[self.memory_pointer] == 0 {
                     self.program_pointer = location;
                 }
             }
-            Command::JumpClose(location) => {
+            Instruction::JumpClose(location) => {
                 if self.memory[self.memory_pointer] != 0 {
                     self.program_pointer = location;
                 }

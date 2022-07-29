@@ -1,11 +1,12 @@
 [package]
 name = "brainfuck"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 crossterm = "0.20.0"
 structopt = "0.3.22"
+thiserror = "1.0.31"
 
 [profile.release]
 lto = "fat"

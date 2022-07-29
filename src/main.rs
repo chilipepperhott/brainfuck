@@ -1,4 +1,6 @@
+mod error;
 mod interpreter;
+mod program;
 
 use std::{
     fs::File,
@@ -7,8 +9,9 @@ use std::{
 };
 
 use crossterm::event::{poll, read, Event, KeyCode};
-use interpreter::BrainfuckInterpreter;
 
+use interpreter::Interpreter;
+use program::Program;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -31,7 +34,8 @@ fn main() {
     file.read_to_string(&mut program)
         .expect("Could not read from file.");
 
-    let mut interpreter = BrainfuckInterpreter::new(&program).unwrap();
+    let mut program = Program::from_text(&program).unwrap();
+    let mut interpreter = Interpreter::new(program);
 
     if let Some(input) = opts.input {
         interpreter.write_input_string(&input);
