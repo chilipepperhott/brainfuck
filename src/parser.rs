@@ -20,11 +20,25 @@ impl Parser {
     }
 
     pub fn parse_token(&mut self, token: Token) -> Result<(), Error> {
+        macro_rules! push_or_inc {
+            ($action:ident) => {
+                if let Some(Op::$action(n)) = self.parsed.last_mut() {
+                    if (*n < 255) {
+                        *n += 1
+                    } else {
+                        self.parsed.push(Op::$action(1))
+                    }
+                } else {
+                    self.parsed.push(Op::$action(1))
+                }
+            };
+        }
+
         match token {
-            Token::Left => self.parsed.push(Op::Left),
-            Token::Right => self.parsed.push(Op::Right),
-            Token::Inc => self.parsed.push(Op::Inc),
-            Token::Dec => self.parsed.push(Op::Dec),
+            Token::Left => push_or_inc!(Left),
+            Token::Right => push_or_inc!(Right),
+            Token::Inc => push_or_inc!(Inc),
+            Token::Dec => push_or_inc!(Dec),
             Token::Put => self.parsed.push(Op::Put),
             Token::Get => self.parsed.push(Op::Get),
             // Set `jump_to` to 0. This will be overwritten when the close tag is processed.

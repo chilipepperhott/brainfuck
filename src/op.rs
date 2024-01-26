@@ -1,13 +1,13 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Op {
     /// <
-    Left,
+    Left(u8),
     /// >
-    Right,
+    Right(u8),
     /// +
-    Inc,
+    Inc(u8),
     /// -
-    Dec,
+    Dec(u8),
     /// .
     Put,
     /// ,

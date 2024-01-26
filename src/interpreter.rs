@@ -31,10 +31,10 @@ impl Interpreter {
         let cur_m = &mut self.memory[self.mp];
 
         match cur_op {
-            Op::Left => self.mp -= 1,
-            Op::Right => self.mp += 1,
-            Op::Inc => *cur_m = (*cur_m).overflowing_add(1).0,
-            Op::Dec => *cur_m = (*cur_m).overflowing_sub(1).0,
+            Op::Left(n) => self.mp -= n as usize,
+            Op::Right(n) => self.mp += n as usize,
+            Op::Inc(n) => *cur_m = (*cur_m).overflowing_add(n).0,
+            Op::Dec(n) => *cur_m = (*cur_m).overflowing_sub(n).0,
             Op::Put => output.write_all(&[*cur_m])?,
             Op::Get => {
                 let mut buf = [0; 1];

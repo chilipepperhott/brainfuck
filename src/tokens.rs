@@ -86,10 +86,10 @@ mod tests {
 impl From<Op> for Token {
     fn from(op: Op) -> Self {
         match op {
-            Op::Left => Token::Left,
-            Op::Right => Token::Right,
-            Op::Inc => Token::Inc,
-            Op::Dec => Token::Dec,
+            Op::Left(_) => Token::Left,
+            Op::Right(_) => Token::Right,
+            Op::Inc(_) => Token::Inc,
+            Op::Dec(_) => Token::Dec,
             Op::Put => Token::Put,
             Op::Get => Token::Get,
             Op::Open { .. } => Token::Close,
